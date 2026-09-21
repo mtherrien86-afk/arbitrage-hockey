@@ -8,6 +8,8 @@
   const SAVE_DELAY = 1200;     // enregistre 1,2 s après la dernière modification
   const LS_CFG = 'arbitrage.connexion';
   const LS_CACHE = 'arbitrage.cache';
+  const LS_THEME = 'arbitrage.theme';
+  const LEGACY_SEASON = '2025-2026';   // saison des tarifs créés avant l'ajout des saisons
 
   const $ = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -45,7 +47,13 @@
   /* =====================================================================
    *  Calculs (mêmes règles que les formules du fichier Excel)
    * ===================================================================== */
-  const descOf = (t) => `${t.cat} - ${t.double ? 'Double lettre' : 'Simple lettre'} - ${t.type}`;
+  const descOf = (t) => [t.cat, t.variant, t.type].filter(Boolean).join(' - ');
+
+  // Saison de hockey : du 1er août au 31 juillet.
+  function seasonOf(iso) {
+    const [y, m] = (iso || todayISO()).split('-').map(Number);
+    return m >= 8 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+  }
 
   function buildLookups() {
     priceMap = new Map();
@@ -69,20 +77,32 @@
   /* =====================================================================
    *  Données : conversion et cache local
    * ===================================================================== */
+  function normTariff(t) {
+    return {
+      id: uid(),
+      season: t.season || LEGACY_SEASON,
+      cat: t.cat || '',
+      // ancien format : case « Double lettre »
+      variant: t.variant !== undefined ? t.variant : (t.double ? 'Double lettre' : 'Simple lettre'),
+      type: t.type || '',
+      cost: Number(t.cost) || 0
+    };
+  }
+
   function hydrate(d) {
     state.rows = (d.rows || []).map((r) => ({
       id: uid(), date: r.date || '', arena: r.arena || '', category: r.category || '',
       travel: !!r.travel, extra: Number(r.extra) || 0, counted: !!r.counted,
       comment: r.comment || '', tournament: !!r.tournament, paid: !!r.paid
     }));
-    state.tariffs = (d.tariffs || []).map((t) => ({ id: uid(), cat: t.cat || '', double: !!t.double, type: t.type || '', cost: Number(t.cost) || 0 }));
+    state.tariffs = (d.tariffs || []).map(normTariff);
     state.arenas = (d.arenas || []).map((a) => ({ id: uid(), name: a.name || '', travelCost: Number(a.travelCost) || 0 }));
   }
 
   function serialize() {
     return {
       rows: state.rows.map(({ id, ...r }) => ({ ...r, extra: Number(r.extra) || 0 })),
-      tariffs: state.tariffs.map(({ id, ...t }) => ({ ...t, cost: Number(t.cost) || 0 })),
+      tariffs: state.tariffs.map((t) => ({ season: t.season, cat: t.cat, variant: t.variant, type: t.type, cost: Number(t.cost) || 0 })),
       arenas: state.arenas.map(({ id, ...a }) => ({ ...a, travelCost: Number(a.travelCost) || 0 }))
     };
   }
@@ -319,14 +339,38 @@
     return html;
   }
 
-  function rowHTML(r, arenaNames, catNames) {
+  // Catégories groupées par saison, la plus récente en premier.
+  function catGroups() {
+    const m = new Map();
+    state.tariffs.forEach((t) => {
+      const d = descOf(t);
+      if (!d) return;
+      if (!m.has(t.season)) m.set(t.season, []);
+      m.get(t.season).push(d);
+    });
+    return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([label, items]) => ({ label, items }));
+  }
+
+  function groupedOptionsHTML(groups, current, placeholder) {
+    const seen = new Set();
+    let html = `<option value=""${current ? '' : ' selected'}>${esc(placeholder)}</option>`;
+    groups.forEach((g) => {
+      const opts = g.items.filter((v) => !seen.has(v) && seen.add(v))
+        .map((v) => `<option value="${esc(v)}"${v === current ? ' selected' : ''}>${esc(v)}</option>`).join('');
+      if (opts) html += `<optgroup label="Saison ${esc(g.label)}">${opts}</optgroup>`;
+    });
+    if (current && !seen.has(current)) html += `<option value="${esc(current)}" selected>⚠ ${esc(current)} (introuvable)</option>`;
+    return html;
+  }
+
+  function rowHTML(r, arenaNames, groups) {
     const c = calc(r);
     const cls = [r.paid ? 'paid' : '', c.missingCategory || c.missingArena ? 'warn' : ''].filter(Boolean).join(' ');
     const chk = (f, label) => `<input type="checkbox" data-f="${f}" aria-label="${label}"${r[f] ? ' checked' : ''}>`;
     return `<tr data-id="${r.id}" class="${cls}">
       <td class="c-date" data-label="Date"><input type="date" data-f="date" value="${esc(r.date)}" aria-label="Date"></td>
       <td class="c-arena" data-label="Aréna"><select data-f="arena" aria-label="Aréna">${optionsHTML(arenaNames, r.arena, 'Choisir une aréna')}</select></td>
-      <td class="c-cat" data-label="Catégorie"><select data-f="category" aria-label="Catégorie">${optionsHTML(catNames, r.category, 'Choisir une catégorie')}</select></td>
+      <td class="c-cat" data-label="Catégorie"><select data-f="category" aria-label="Catégorie">${groupedOptionsHTML(groups, r.category, 'Choisir une catégorie')}</select></td>
       <td class="c-price n calc" data-label="Prix" data-c="price">${fmt(c.price)}</td>
       <td class="c-tpay c" data-label="Déplacement à payer">${chk('travel', 'Déplacement à payer')}</td>
       <td class="c-travel n calc" data-label="Déplacement" data-c="travel">${fmt(c.travel)}</td>
@@ -342,8 +386,8 @@
 
   function renderTable() {
     const arenaNames = state.arenas.map((a) => a.name);
-    const catNames = state.tariffs.map(descOf);
-    $('#rows').innerHTML = visibleRows().map((r) => rowHTML(r, arenaNames, catNames)).join('');
+    const groups = catGroups();
+    $('#rows').innerHTML = visibleRows().map((r) => rowHTML(r, arenaNames, groups)).join('');
     renderEmpty();
   }
 
@@ -462,7 +506,9 @@
     const last = state.rows[state.rows.length - 1];
     const date = todayISO();
     const arena = (last && last.arena) || (state.arenas[0] && state.arenas[0].name) || '';
-    const category = (last && last.category) || '';
+    // On reprend la catégorie de la dernière partie seulement si elle est de la saison en cours.
+    const lastTariff = last && state.tariffs.find((t) => descOf(t) === last.category);
+    const category = lastTariff && lastTariff.season === seasonOf(date) ? last.category : '';
     const r = { id: uid(), date, arena, category, travel: defaultTravel(date, arena), extra: 0, counted: false, comment: '', tournament: false, paid: false };
     state.rows.push(r);
     state.filter = { mode: 'all', arena: '', month: '', q: '' };
@@ -527,18 +573,37 @@
   $('.tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) selectTab(b.dataset.tab); });
 
   /* ---- Tarifs ---- */
+  const ui = { tSeason: '' };   // filtre de saison dans la liste des tarifs ('' = toutes)
+
+  function tariffSeasons() {
+    return [...new Set(state.tariffs.map((t) => t.season).filter(Boolean))].sort().reverse();
+  }
+
   function renderTariffs() {
-    $('#t-body').innerHTML = state.tariffs.map((t) => `<tr data-id="${t.id}">
+    const seasons = tariffSeasons();
+    if (ui.tSeason && !seasons.includes(ui.tSeason)) ui.tSeason = '';
+    $('#t-season').innerHTML = `<option value=""${ui.tSeason ? '' : ' selected'}>Toutes (${state.tariffs.length})</option>` +
+      seasons.map((se) => `<option value="${esc(se)}"${se === ui.tSeason ? ' selected' : ''}>${esc(se)} (${state.tariffs.filter((t) => t.season === se).length})</option>`).join('');
+
+    const list = state.tariffs.filter((t) => !ui.tSeason || t.season === ui.tSeason);
+    $('#t-body').innerHTML = list.map((t) => `<tr data-id="${t.id}">
+      <td class="t-season" data-label="Saison"><input type="text" list="dl-seasons" data-f="season" value="${esc(t.season)}" aria-label="Saison"></td>
       <td class="t-cat" data-label="Catégorie"><input type="text" list="dl-cats" data-f="cat" value="${esc(t.cat)}" aria-label="Catégorie"></td>
-      <td class="t-dbl c" data-label="Double lettre"><input type="checkbox" data-f="double" ${t.double ? 'checked' : ''} aria-label="Double lettre"></td>
+      <td class="t-var" data-label="Variante"><input type="text" list="dl-variants" data-f="variant" value="${esc(t.variant)}" aria-label="Variante" placeholder="(aucune)"></td>
       <td class="t-type" data-label="Type"><input type="text" list="dl-types" data-f="type" value="${esc(t.type)}" aria-label="Type"></td>
       <td class="t-cost" data-label="Coût ($)"><input type="number" step="0.01" min="0" data-f="cost" value="${t.cost}" aria-label="Coût" inputmode="decimal"></td>
       <td class="t-desc desc" data-c="desc">${esc(descOf(t))}</td>
       <td class="t-del"><button class="icon-btn" type="button" data-act="del" aria-label="Supprimer ce tarif">${TRASH}</button></td>
     </tr>`).join('');
-    $('#dl-cats').innerHTML = [...new Set(state.tariffs.map((t) => t.cat).filter(Boolean))].map((v) => `<option value="${esc(v)}">`).join('');
-    $('#dl-types').innerHTML = [...new Set(state.tariffs.map((t) => t.type).filter(Boolean))].map((v) => `<option value="${esc(v)}">`).join('');
+
+    const uniq = (f) => [...new Set(state.tariffs.map((t) => t[f]).filter(Boolean))].map((v) => `<option value="${esc(v)}">`).join('');
+    $('#dl-seasons').innerHTML = uniq('season');
+    $('#dl-cats').innerHTML = uniq('cat');
+    $('#dl-types').innerHTML = uniq('type');
+    $('#dl-variants').innerHTML = [...new Set(['Simple lettre', 'Double lettre', ...state.tariffs.map((t) => t.variant).filter(Boolean)])].map((v) => `<option value="${esc(v)}">`).join('');
   }
+
+  $('#t-season').addEventListener('change', (e) => { ui.tSeason = e.target.value; renderTariffs(); });
 
   function onTariffEdit(e) {
     const el = e.target;
@@ -550,9 +615,9 @@
     if (!t) return;
     const before = descOf(t);
     const unique = state.tariffs.filter((x) => descOf(x) === before).length === 1;
-    t[f] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? (parseFloat(el.value) || 0) : el.value;
+    t[f] = el.type === 'number' ? (parseFloat(el.value) || 0) : el.value;
     const after = descOf(t);
-    if (before !== after && unique) state.rows.forEach((r) => { if (r.category === before) r.category = after; });
+    if (before && before !== after && unique) state.rows.forEach((r) => { if (r.category === before) r.category = after; });
     $('[data-c="desc"]', tr).textContent = after;
     buildLookups();
     markDirty();
@@ -565,18 +630,67 @@
     if (!btn) return;
     const id = btn.closest('tr').dataset.id;
     const t = state.tariffs.find((x) => x.id === id);
-    const used = state.rows.filter((r) => r.category === descOf(t)).length;
+    const used = state.rows.filter((r) => r.category && r.category === descOf(t)).length;
     if (used && !confirm(`${used} partie(s) utilisent ce tarif et se retrouveront sans prix. Supprimer quand même ?`)) return;
     state.tariffs = state.tariffs.filter((x) => x.id !== id);
     buildLookups(); renderTariffs(); markDirty();
   });
 
   $('#t-add').addEventListener('click', () => {
-    state.tariffs.push({ id: uid(), cat: '', double: false, type: '', cost: 0 });
+    const season = ui.tSeason || tariffSeasons()[0] || seasonOf(todayISO());
+    state.tariffs.push({ id: uid(), season, cat: '', variant: '', type: '', cost: 0 });
+    ui.tSeason = season;
     renderTariffs(); markDirty();
     const inputs = $$('#t-body tr:last-child input');
-    if (inputs[0]) inputs[0].focus();
+    if (inputs[1]) inputs[1].focus();
   });
+
+  $('#t-import').addEventListener('click', () => $('#d-file').click());
+
+  /* Importer une grille de tarifs : on ajoute et on met à jour, on ne supprime jamais rien,
+     et les parties déjà saisies ne sont pas touchées. */
+  function importTariffs(d) {
+    const byDesc = new Map(state.tariffs.map((t) => [descOf(t), t]));
+    const byName = new Map(state.arenas.map((a) => [a.name, a]));
+    const plan = { addT: [], updT: [], skipT: [], addA: [], updA: [] };
+
+    (d.tariffs || []).map(normTariff).forEach((n) => {
+      const ex = byDesc.get(descOf(n));
+      if (!ex) plan.addT.push(n);
+      else if (ex.season !== n.season) plan.skipT.push(n);
+      else if (ex.cost !== n.cost) plan.updT.push({ ex, n });
+    });
+    (d.arenas || []).forEach((a) => {
+      const cost = Number(a.travelCost) || 0;
+      const ex = byName.get(a.name);
+      if (!ex) plan.addA.push({ name: a.name, travelCost: cost });
+      else if (ex.travelCost !== cost) plan.updA.push({ ex, cost });
+    });
+
+    const lines = [
+      `Importer « ${d.source || 'tarifs'} »${d.home ? ` pour ${d.home}` : ''} ?`, '',
+      `Tarifs : ${plan.addT.length} ajouté(s), ${plan.updT.length} mis à jour${plan.skipT.length ? `, ${plan.skipT.length} ignoré(s) (déjà dans une autre saison)` : ''}.`,
+      `Arénas : ${plan.addA.length} ajoutée(s), ${plan.updA.length} mise(s) à jour.`
+    ];
+    plan.updA.forEach((u) => lines.push(`   ${u.ex.name} : ${fmt(u.ex.travelCost)} devient ${fmt(u.cost)}`));
+    lines.push('', 'Tes parties déjà saisies ne sont pas modifiées.');
+    if (d.note) lines.push('', `Rappel : ${d.note}`);
+    if (!plan.addT.length && !plan.updT.length && !plan.addA.length && !plan.updA.length) {
+      toast('Rien à importer : ces tarifs sont déjà à jour.');
+      return;
+    }
+    if (!confirm(lines.join('\n'))) return;
+
+    plan.addT.forEach((n) => state.tariffs.push(n));
+    plan.updT.forEach((u) => { u.ex.cost = u.n.cost; });
+    plan.addA.forEach((a) => state.arenas.push({ id: uid(), ...a }));
+    plan.updA.forEach((u) => { u.ex.travelCost = u.cost; });
+
+    ui.tSeason = d.season || (plan.addT[0] && plan.addT[0].season) || '';
+    renderAll(); renderTariffs(); renderArenas();
+    markDirty();
+    toast(`${plan.addT.length} tarif(s) et ${plan.addA.length} aréna(s) ajouté(s).`);
+  }
 
   /* ---- Arénas ---- */
   function renderArenas() {
@@ -710,17 +824,33 @@
     if (!file) return;
     try {
       const d = JSON.parse(await file.text());
-      if (!Array.isArray(d.rows) || !Array.isArray(d.tariffs) || !Array.isArray(d.arenas)) throw new Error('format');
-      const has = state.rows.length || state.tariffs.length || state.arenas.length;
-      if (has && !confirm(`Remplacer les données actuelles par ${d.rows.length} partie(s), ${d.tariffs.length} tarif(s) et ${d.arenas.length} aréna(s) ?`)) return;
-      hydrate(d);
-      renderAll(); renderTariffs(); renderArenas();
-      markDirty();
-      toast(`${d.rows.length} partie(s) importée(s).`);
+      if (Array.isArray(d.rows) && Array.isArray(d.tariffs) && Array.isArray(d.arenas)) {
+        const has = state.rows.length || state.tariffs.length || state.arenas.length;
+        if (has && !confirm(`Remplacer TOUTES les données actuelles par ${d.rows.length} partie(s), ${d.tariffs.length} tarif(s) et ${d.arenas.length} aréna(s) ?`)) return;
+        hydrate(d);
+        renderAll(); renderTariffs(); renderArenas();
+        markDirty();
+        toast(`${d.rows.length} partie(s) importée(s).`);
+      } else if (Array.isArray(d.tariffs)) {
+        importTariffs(d);
+      } else {
+        throw new Error('format');
+      }
     } catch (_) {
-      toast('Fichier invalide : utilise un .json exporté depuis ce site.');
+      toast('Fichier invalide : utilise un .json de tarifs ou une copie exportée depuis ce site.');
     }
   });
+
+  /* =====================================================================
+   *  Thème (foncé par défaut)
+   * ===================================================================== */
+  function applyTheme(t) {
+    document.documentElement.dataset.theme = t;
+    const m = $('meta[name="theme-color"]');
+    if (m) m.content = t === 'dark' ? '#0A141D' : '#0F2436';
+    try { localStorage.setItem(LS_THEME, t); } catch (_) { /* stockage bloqué */ }
+  }
+  $('#theme').addEventListener('click', () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
 
   /* =====================================================================
    *  Démarrage

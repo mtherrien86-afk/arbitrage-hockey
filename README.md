@@ -5,7 +5,9 @@ Le tableau de ton fichier Excel, en site web :
 - hébergé gratuitement sur **GitHub Pages**;
 - **enregistré automatiquement** dans un **Google Sheet** (environ 1 seconde après chaque modification);
 - **rechargé automatiquement** (toutes les 30 secondes, et dès que tu reviens sur l’onglet), donc ton téléphone et ton ordinateur restent synchronisés;
-- **tarifs et arénas configurables** dans *Réglages* : les prix, les coûts de déplacement et les noms se modifient sans toucher au code.
+- **tarifs et arénas configurables** dans *Réglages* : les prix, les coûts de déplacement et les noms se modifient sans toucher au code;
+- **tarifs par saison** : on peut importer la grille d’une nouvelle saison sans toucher aux parties de la précédente;
+- **thème foncé** par défaut, avec un bouton (soleil/lune) pour passer au clair.
 
 Les calculs sont ceux de l’Excel : Prix (liste de prix) + Déplacement (coût de l’aréna si « Déplacement à payer » est coché) + Supplément = Total.
 
@@ -43,16 +45,29 @@ Les calculs sont ceux de l’Excel : Prix (liste de prix) + Déplacement (coût 
 *Réglages > Connexion > Copier le lien pour un autre appareil*, puis ouvre ce lien sur ton téléphone. Il configure l’appareil et efface le mot de passe de l’adresse.
 Tu peux aussi l’ajouter à l’écran d’accueil depuis le navigateur.
 
+## Importer les tarifs d’une nouvelle saison
+
+Le site ne lit pas les images lui-même (une lecture fiable demanderait une clé secrète, impossible à cacher dans un site public). La grille 2026-2027 a été lue à partir de la capture d’écran et livrée dans `tarifs-2026-2027-princeville.json` :
+
+1. *Réglages > Tarifs > Importer des tarifs (.json)*.
+2. Le site montre un aperçu (tarifs ajoutés, coûts modifiés) et demande confirmation.
+3. Les tarifs sont **ajoutés** sous leur saison, les coûts de déplacement des arénas sont **mis à jour** depuis Princeville. Rien n’est supprimé et les parties déjà saisies gardent leur prix.
+
+Pour une autre grille (ou une autre ville de départ), envoie la nouvelle image à Claude : il produit un fichier au même format.
+
 ## Bon à savoir
 
 - **Si deux appareils modifient en même temps**, ou si tu modifies le Sheet à la main pendant que le site est ouvert, le site ne remplace rien en silence : une bannière te demande quelle version garder.
 - **Hors ligne**, tes modifications sont gardées sur l’appareil et envoyées dès que le réseau revient.
-- **Modifier un tarif change aussi les anciennes parties** qui l’utilisent (comme les `RECHERCHEV` de l’Excel). Renommer une aréna ou un tarif met à jour les parties concernées.
+- **Modifier un tarif change aussi les parties** qui l’utilisent (comme les `RECHERCHEV` de l’Excel). Renommer une aréna ou un tarif met à jour les parties concernées. Comme les tarifs sont classés par saison, un nouveau tarif 2026-2027 n’affecte pas les parties 2025-2026.
+- **Nouvelle partie :** la catégorie de la partie précédente n’est reprise que si elle est de la saison en cours (du 1er août au 31 juillet), pour ne pas facturer avec les anciens tarifs par mégarde.
+- **RSEQ :** si une partie débute avant 18 h, 5 $ s’ajoutent. Ce montant est à saisir dans *Supplément*.
 - **Dans le Google Sheet**, tu peux corriger des valeurs à la main, mais ne renomme pas les onglets et ne déplace pas les colonnes. Les colonnes *Prix*, *Déplacement* et *Total* sont des formules, réécrites à chaque enregistrement du site.
+- **Si tu as déjà installé la version précédente**, colle le nouveau `Code.gs` puis redéploie (*Déployer > Gérer les déploiements >* crayon *> Nouvelle version*). Ta liste de prix existante est convertie automatiquement (case « Double lettre » devenue « Variante », saison 2025-2026).
 - **Si tu modifies `Code.gs`** : *Déployer > Gérer les déploiements >* crayon *> Version : Nouvelle version*. L’URL ne change pas.
 
 ## Sécurité
 
-- Le dépôt GitHub ne contient **que du code**, aucune donnée. Ne mets jamais `donnees-depart.json` ni une copie exportée dans le dépôt (le `.gitignore` t’aide).
+- Le dépôt GitHub ne contient **que du code**, aucune donnée. Ne mets jamais `donnees-depart.json` ni une copie exportée dans le dépôt (le `.gitignore` t’aide). Les fichiers de tarifs peuvent y aller sans risque, mais ils n’en ont pas besoin.
 - L’URL du script est publique en théorie, mais elle refuse toute requête sans ton mot de passe. Garde le mot de passe et le « lien pour un autre appareil » pour toi.
 - Il n’y a pas de comptes d’utilisateurs : qui a l’URL et le mot de passe peut lire et modifier les données.
