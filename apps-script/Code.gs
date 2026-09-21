@@ -21,7 +21,7 @@ const TAB_ARENAS = 'Liste des arénas';
 
 const ROW_HEADERS = ['Date', 'Aréna', 'Catégorie', 'Prix', 'Déplacement à payer', 'Déplacement',
   'Supplément', 'Total', 'Comptabilisé', 'Commentaire', 'Tournoi', 'Payé'];
-const TARIFF_HEADERS = ['Catégorie', 'Double lettre', 'Description', 'Type', 'Coût'];
+const TARIFF_HEADERS = ['Catégorie', 'Variante', 'Description', 'Type', 'Coût', 'Saison'];
 const ARENA_HEADERS = ['Aréna', 'Coût de déplacement'];
 
 /* ------------------------------ Entrées HTTP ------------------------------ */
@@ -66,6 +66,13 @@ function sheets() {
 function bool(v) { return v === true || String(v).toUpperCase() === 'TRUE'; }
 function num(v) { const n = Number(v); return isFinite(n) ? n : 0; }
 
+// Ancien format : case à cocher « Double lettre ». Nouveau format : texte libre (« Simple lettre », vide, etc.).
+function variantOf(v) {
+  if (v === true || String(v).toUpperCase() === 'TRUE') return 'Double lettre';
+  if (v === false || String(v).toUpperCase() === 'FALSE') return 'Simple lettre';
+  return String(v);
+}
+
 function body(sh, ncols) {
   const last = sh.getLastRow();
   return last < 2 ? [] : sh.getRange(2, 1, last - 1, ncols).getValues();
@@ -91,10 +98,10 @@ function snapshot() {
       };
     });
 
-  const tariffs = body(s.tariffs, 5)
+  const tariffs = body(s.tariffs, 6)
     .filter(function (r) { return r[0] !== '' || r[3] !== ''; })
     .map(function (r) {
-      return { cat: String(r[0]), double: bool(r[1]), type: String(r[3]), cost: num(r[4]) };
+      return { season: String(r[5]), cat: String(r[0]), variant: variantOf(r[1]), type: String(r[3]), cost: num(r[4]) };
     });
 
   const arenas = body(s.arenas, 2)
@@ -154,19 +161,17 @@ function writeAll(d) {
 
   /* Liste de prix */
   header(s.tariffs, TARIFF_HEADERS);
-  resetBody(s.tariffs, 5);
+  resetBody(s.tariffs, 6);
   if (d.tariffs.length) {
     const vals = d.tariffs.map(function (t, i) {
       const n = i + 2;
-      return [t.cat, !!t.double,
-        '=A' + n + '&" - "&IF(B' + n + '=TRUE,"Double lettre","Simple lettre")&" - "&D' + n,
-        t.type, num(t.cost)];
+      return [t.cat, t.variant || '', '=TEXTJOIN(" - ",TRUE,A' + n + ',B' + n + ',D' + n + ')',
+        t.type, num(t.cost), t.season || ''];
     });
-    s.tariffs.getRange(2, 1, vals.length, 5).setValues(vals);
-    s.tariffs.getRange(2, 2, vals.length, 1).insertCheckboxes();
+    s.tariffs.getRange(2, 1, vals.length, 6).setValues(vals);
     s.tariffs.getRange(2, 5, vals.length, 1).setNumberFormat('#,##0.00 $');
   }
-  s.tariffs.setColumnWidths(1, 5, 150);
+  s.tariffs.setColumnWidths(1, 6, 150);
   s.tariffs.setColumnWidth(3, 330);
 
   /* Liste des arénas */
