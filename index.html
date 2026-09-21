@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#0F2436">
+  <title>Arbitrage 2025-2026</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230F2436'/%3E%3Cpath d='M20 0h12v100H20zM44 0h12v100H44zM68 0h12v100H68z' fill='%23FAFCFD'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="stripes" aria-hidden="true"></div>
+
+  <header class="top">
+    <h1>Arbitrage <span class="nowrap">2025-2026</span></h1>
+    <div class="top-actions">
+      <span class="status" id="status" data-kind="loading" role="status" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span><span id="status-text">Chargement…</span>
+      </span>
+      <button class="btn" id="open-settings" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        Réglages
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="board" aria-label="Totaux selon les filtres actifs">
+      <div class="cell cell-total"><span class="lbl">Total</span><span class="val" id="b-total">0,00 $</span></div>
+      <div class="cell cell-due"><span class="lbl">À recevoir</span><span class="val" id="b-due">0,00 $</span></div>
+      <div class="cell"><span class="lbl">Prix</span><span class="val" id="b-price">0,00 $</span></div>
+      <div class="cell"><span class="lbl">Déplacement</span><span class="val" id="b-travel">0,00 $</span></div>
+      <div class="cell"><span class="lbl">Supplément</span><span class="val" id="b-extra">0,00 $</span></div>
+      <div class="cell"><span class="lbl">Parties</span><span class="val" id="b-count">0</span></div>
+    </section>
+
+    <div id="banner" class="banner" role="alert" hidden></div>
+
+    <section class="toolbar" aria-label="Filtres">
+      <div class="seg" role="group" aria-label="Afficher">
+        <button type="button" data-mode="all" aria-pressed="true">Toutes</button>
+        <button type="button" data-mode="unpaid" aria-pressed="false">Non payées</button>
+        <button type="button" data-mode="uncounted" aria-pressed="false">À comptabiliser</button>
+      </div>
+      <select id="f-arena" aria-label="Filtrer par aréna"></select>
+      <select id="f-month" aria-label="Filtrer par mois"></select>
+      <input id="f-q" type="search" placeholder="Chercher un commentaire…" aria-label="Chercher">
+      <span class="grow"></span>
+      <button class="btn" id="sort" type="button">Trier par date</button>
+      <button class="btn primary" id="add" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Ajouter une partie
+      </button>
+    </section>
+
+    <div class="ledger">
+      <table id="table">
+        <colgroup>
+          <col style="width:150px"><col style="width:222px"><col style="width:300px">
+          <col style="width:88px"><col style="width:104px"><col style="width:104px">
+          <col style="width:98px"><col style="width:96px"><col style="width:108px">
+          <col style="width:160px"><col style="width:78px"><col style="width:66px"><col style="width:48px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Date</th><th>Aréna</th><th>Catégorie</th>
+            <th class="n">Prix</th><th class="c">Déplacement à payer</th><th class="n">Déplacement</th>
+            <th class="n">Supplément</th><th class="n">Total</th><th class="c">Comptabilisé</th>
+            <th>Commentaire</th><th class="c">Tournoi</th><th class="c">Payé</th><th><span class="sr">Supprimer</span></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div id="empty" class="empty" hidden></div>
+  </main>
+
+  <!-- ===================== Réglages ===================== -->
+  <dialog id="settings" aria-labelledby="settings-title">
+    <div class="dlg-head">
+      <h2 id="settings-title">Réglages</h2>
+      <button class="btn" type="button" id="close-settings">Fermer</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="tarifs" type="button">Tarifs</button>
+      <button role="tab" data-tab="arenas" type="button">Arénas</button>
+      <button role="tab" data-tab="connexion" type="button">Connexion</button>
+      <button role="tab" data-tab="donnees" type="button">Données</button>
+    </div>
+
+    <div class="dlg-body">
+      <section id="tab-tarifs" class="panel" role="tabpanel">
+        <p class="hint">Le prix d’une partie vient de cette liste. Attention : changer un coût modifie aussi les parties déjà saisies, comme dans ton Excel. Renommer un tarif met à jour les parties qui l’utilisent.</p>
+        <div class="mini-scroll">
+          <table class="mini tariffs">
+            <thead><tr><th>Catégorie</th><th class="c">Double lettre</th><th>Type</th><th>Coût ($)</th><th>Description</th><th></th></tr></thead>
+            <tbody id="t-body"></tbody>
+          </table>
+        </div>
+        <button class="btn" type="button" id="t-add">Ajouter un tarif</button>
+        <datalist id="dl-cats"></datalist>
+        <datalist id="dl-types"></datalist>
+      </section>
+
+      <section id="tab-arenas" class="panel" role="tabpanel">
+        <p class="hint">Le coût de déplacement s’ajoute à une partie quand « Déplacement à payer » est coché.</p>
+        <div class="mini-scroll">
+          <table class="mini arenas">
+            <thead><tr><th>Aréna</th><th>Coût de déplacement ($)</th><th></th></tr></thead>
+            <tbody id="a-body"></tbody>
+          </table>
+        </div>
+        <button class="btn" type="button" id="a-add">Ajouter une aréna</button>
+      </section>
+
+      <section id="tab-connexion" class="panel" role="tabpanel">
+        <p class="hint" id="cfg-hint">Colle l’adresse du déploiement Apps Script (elle se termine par <code>/exec</code>) et le mot de passe choisi dans <code>Code.gs</code>. Ils restent sur cet appareil.</p>
+        <label class="field">Adresse du service Google
+          <input id="cfg-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
+        </label>
+        <label class="field">Mot de passe
+          <input id="cfg-token" type="password" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="row-actions">
+          <button class="btn primary" type="button" id="cfg-save">Enregistrer et tester</button>
+          <button class="btn" type="button" id="cfg-pair">Copier le lien pour un autre appareil</button>
+          <button class="btn danger" type="button" id="cfg-forget">Déconnecter cet appareil</button>
+        </div>
+        <p class="hint">Le lien pour un autre appareil contient ton mot de passe : garde-le pour toi.</p>
+        <p id="cfg-msg" class="msg" role="status"></p>
+      </section>
+
+      <section id="tab-donnees" class="panel" role="tabpanel">
+        <p class="hint">Tout est enregistré automatiquement dans le Google Sheet. Ces outils servent aux cas particuliers.</p>
+        <div class="row-actions">
+          <button class="btn" type="button" id="d-reload">Recharger depuis le Google Sheet</button>
+          <button class="btn" type="button" id="d-export">Télécharger une copie (.json)</button>
+          <button class="btn" type="button" id="d-import">Importer un fichier (.json)</button>
+          <input type="file" id="d-file" accept="application/json,.json" hidden>
+        </div>
+      </section>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
